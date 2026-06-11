@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: croo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: croo
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    configs:
+      - source: databases
+        target: /docker-entrypoint-initdb.d/01-databases.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U croo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes: [redis-data:/data]
+    restart: unless-stopped
+
+  scanner:
+    build: ../croo-contract-risk-scanner
+    env_file:
+      - path: env/scanner.env
+        required: false
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+  watch:
+    build: ../croo-protocol-watch
+    env_file:
+      - path: env/watch.env
+        required: false
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+  sentinel:
+    build: ../croo-sentinel-orchestrator
+    env_file:
+      - path: env/sentinel.env
+        required: false
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+  publisher:
+    build: ../croo-signal-publisher
+    env_file:
+      - path: env/publisher.env
+        required: false
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+  doctor:
+    build: ../croo-cap-doctor
+    env_file:
+      - path: env/doctor.env
+        required: false
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+  verifier:
+    build: ../croo-consensus-verifier
+    env_file:
+      - path: env/verifier.env
+        required: false
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+
+configs:
+  databases:
+    file: ./init/01-databases.sql
